@@ -1,0 +1,4 @@
+storePassword=replace-me
+keyPassword=replace-me
+keyAlias=workout-buddy
+storeFile=/absolute/path/to/workout-buddy-upload.jks
