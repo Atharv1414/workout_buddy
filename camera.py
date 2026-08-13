@@ -1,23 +1,29 @@
+"""Small camera diagnostic for Workout Buddy."""
+
 import cv2
 
-# Use AVFoundation backend (better for macOS M1/M2)
-cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
+from buddy import open_camera
 
-if not cap.isOpened():
-    print("⚠️ Unable to access the camera. Please enable camera permissions for Terminal in System Settings → Privacy & Security → Camera.")
-else:
-    print("✅ Camera opened successfully. Press 'q' to quit.")
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        print("⚠️ Frame not received.")
-        break
+def main() -> int:
+    camera = open_camera(0)
+    if not camera.isOpened():
+        print("Unable to open camera 0. Check operating-system camera permissions.")
+        return 1
+    print("Camera opened. Press q or Esc to quit.")
+    try:
+        while True:
+            received, frame = camera.read()
+            if not received:
+                print("No camera frame received.")
+                return 1
+            cv2.imshow("Workout Buddy - Camera Test", frame)
+            if cv2.waitKey(1) & 0xFF in (ord("q"), 27):
+                return 0
+    finally:
+        camera.release()
+        cv2.destroyAllWindows()
 
-    cv2.imshow("Camera Test", frame)
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-cap.release()
-cv2.destroyAllWindows()
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,24 @@
+name: workout_buddy
+description: Cross-platform AI workout coach for iOS and Android.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.8.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  camera: 0.11.2+1
+  google_mlkit_pose_detection: ^0.15.0
+  shared_preferences: 2.5.3
+  health: ^13.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  test: ^1.25.15
+
+flutter:
+  uses-material-design: true
