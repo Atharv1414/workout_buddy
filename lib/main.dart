@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
@@ -6,6 +7,8 @@ import 'services/app_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Pose angles are tuned for an upright frame; the camera screen is portrait.
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   final onboardingComplete = await AppPreferences().onboardingComplete();
   runApp(WorkoutBuddyApp(onboardingComplete: onboardingComplete));
 }

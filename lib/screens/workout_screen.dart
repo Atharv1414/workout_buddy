@@ -4,13 +4,37 @@ import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
 import '../models/exercise.dart';
 import '../services/history_repository.dart';
 import '../services/app_preferences.dart';
+import '../services/frame_rotation.dart';
 import '../services/integrations.dart';
 import '../services/rep_counter.dart';
+
+const _deviceRotation = <DeviceOrientation, int>{
+  DeviceOrientation.portraitUp: 0,
+  DeviceOrientation.landscapeLeft: 90,
+  DeviceOrientation.portraitDown: 180,
+  DeviceOrientation.landscapeRight: 270,
+};
+
+String _cameraErrorMessage(Object error) {
+  if (error is CameraException) {
+    switch (error.code) {
+      case 'CameraAccessDenied':
+      case 'CameraAccessDeniedWithoutPrompt':
+      case 'CameraAccessRestricted':
+        return 'Camera access is turned off. Allow it for Workout Buddy in '
+            'Settings, then try again.';
+    }
+  }
+  if (error is StateError) return error.message;
+  return 'The camera could not start. Close other apps that may be using it, '
+      'then try again.';
+}
 
 class WorkoutScreen extends StatefulWidget {
   const WorkoutScreen({super.key, required this.exercise});
@@ -32,6 +56,8 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   Timer? _ticker;
   bool _processing = false;
   bool _streaming = false;
+  bool _opening = false;
+  bool _inBackground = false;
   bool _finished = false;
   bool _leftSide = true;
   String _feedback = 'Step back until your full body is visible';
@@ -51,8 +77,24 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   }
 
   Future<void> _start() async {
+    _leftSide = await _preferences.preferredLeftSide();
+    await _startSession();
+  }
+
+  /// Opens the camera, then runs the workout timer while it is open.
+  Future<void> _startSession() async {
+    if (_finished || !await _openCamera()) return;
+    _watch.start();
+    _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _seconds = _watch.elapsed.inSeconds);
+    });
+  }
+
+  Future<bool> _openCamera() async {
+    if (_camera != null) return true;
+    if (_opening) return false;
+    _opening = true;
     try {
-      _leftSide = await _preferences.preferredLeftSide();
       final cameras = await availableCameras();
       if (cameras.isEmpty) throw StateError('No camera was found.');
       final selected =
@@ -69,16 +111,32 @@ class _WorkoutScreenState extends State<WorkoutScreen>
             : ImageFormatGroup.bgra8888,
       );
       await controller.initialize();
+      // The app may have been backgrounded or closed while the camera opened.
+      if (!mounted || _inBackground || _finished) {
+        await controller.dispose();
+        return false;
+      }
       _camera = controller;
-      _watch.start();
-      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() => _seconds = _watch.elapsed.inSeconds);
-      });
       await _startStream();
       if (mounted) setState(() {});
+      return true;
     } catch (error) {
       if (mounted) setState(() => _error = error);
+      return false;
+    } finally {
+      _opening = false;
     }
+  }
+
+  /// Releases the camera so other apps (and the OS) can use it. The camera
+  /// plugin recommends this whenever the app becomes inactive.
+  Future<void> _closeCamera() async {
+    final camera = _camera;
+    if (camera == null) return;
+    _camera = null;
+    _streaming = false;
+    if (mounted) setState(() {});
+    await camera.dispose();
   }
 
   Future<void> _startStream() async {
@@ -98,23 +156,38 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   Future<void> _retry() async {
     setState(() => _error = null);
     _ticker?.cancel();
+    _ticker = null;
     _watch
       ..stop()
       ..reset();
     _seconds = 0;
-    _streaming = false;
-    await _camera?.dispose();
-    _camera = null;
-    await _start();
+    await _closeCamera();
+    await _startSession();
+  }
+
+  void _reset() {
+    setState(() {
+      _counter = RepCounter(widget.exercise);
+      _watch.reset();
+      _seconds = 0;
+    });
   }
 
   Future<void> _processFrame(CameraImage frame) async {
-    if (_processing || !mounted || _camera == null) return;
+    final camera = _camera;
+    if (_processing || !mounted || camera == null) return;
     _processing = true;
     try {
-      final rotation = InputImageRotationValue.fromRawValue(
-        _camera!.description.sensorOrientation,
+      final degrees = frameRotationDegrees(
+        isAndroid: Platform.isAndroid,
+        sensorOrientation: camera.description.sensorOrientation,
+        frontCamera:
+            camera.description.lensDirection == CameraLensDirection.front,
+        deviceRotation: _deviceRotation[camera.value.deviceOrientation],
       );
+      final rotation = degrees == null
+          ? null
+          : InputImageRotationValue.fromRawValue(degrees);
       final format = InputImageFormatValue.fromRawValue(frame.format.raw);
       if (rotation == null || format == null || frame.planes.length != 1) {
         return;
@@ -289,11 +362,12 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   Future<void> didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
+      _inBackground = true;
       _watch.stop();
-      await _stopStream();
-    } else if (state == AppLifecycleState.resumed && !_finished) {
-      _watch.start();
-      await _startStream();
+      await _closeCamera();
+    } else if (state == AppLifecycleState.resumed) {
+      _inBackground = false;
+      if (!_finished && _error == null) await _startSession();
     }
   }
 
@@ -330,7 +404,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                       const Icon(Icons.no_photography_outlined, size: 48),
                       const SizedBox(height: 16),
                       Text(
-                        'Camera unavailable\n\n$_error',
+                        'Camera unavailable\n\n${_cameraErrorMessage(_error!)}',
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 18),
@@ -374,11 +448,32 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                             ButtonSegment(value: false, label: Text('Right')),
                           ],
                           selected: {_leftSide},
-                          onSelectionChanged: (value) =>
-                              setState(() => _leftSide = value.first),
+                          onSelectionChanged: (value) => setState(() {
+                            _leftSide = value.first;
+                            // The other side's joints are elsewhere; don't
+                            // let the switch complete half a rep.
+                            _counter.restartCycle();
+                          }),
                         ),
                       ],
                     ),
+                    if (_counter.reps == 0) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.phone_android, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text(widget.exercise.setupTip)),
+                          ],
+                        ),
+                      ),
+                    ],
                     const Spacer(),
                     Text(
                       '${_counter.reps}',
@@ -424,9 +519,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => setState(
-                              () => _counter = RepCounter(widget.exercise),
-                            ),
+                            onPressed: _reset,
                             child: const Text('Reset'),
                           ),
                         ),
