@@ -26,6 +26,8 @@ accounts, or Technogym approval.
 
 ## Physical-device acceptance
 
+Follow [`docs/DEVICE_TESTING.md`](docs/DEVICE_TESTING.md) for the step-by-step protocol and pass targets.
+
 - [ ] Test squats, push-ups, and curls on representative iPhones and Android devices.
 - [ ] Calibrate pose thresholds with different body types, camera distances, clothing, and lighting.
 - [ ] Test camera denial and later approval, Health permission denial and approval, background/resume, incoming calls, and low-memory recovery.

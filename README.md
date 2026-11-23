@@ -29,7 +29,7 @@ flutter pub get
 flutter run
 ```
 
-Use a physical phone for camera and pose testing. The iOS target is 15.5 or newer and the Android minimum is API 26.
+Use a physical phone for camera and pose testing. The iOS target is 15.5 or newer and the Android minimum is API 26. ML Kit does not run in the iOS Simulator on Apple-silicon Macs. See [`docs/DEVICE_TESTING.md`](docs/DEVICE_TESTING.md) for on-device setup, the smoke test and the form-threshold calibration protocol.
 
 Useful checks:
 
