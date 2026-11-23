@@ -25,30 +25,30 @@ class Exercise {
     Exercise(
       type: ExerciseType.squat,
       name: 'Squats',
-      subtitle: 'Track knee depth and complete reps',
+      subtitle: 'Depth and chest position on every rep',
       emoji: '🏋️',
       setupTip:
-          'Stand side-on to the phone, 2–3 m away, with hip, knee and ankle in view.',
+          'Stand side-on to the phone, 2–3 m away, with your whole body from head to feet in view.',
       downAngle: 95,
       upAngle: 160,
     ),
     Exercise(
       type: ExerciseType.pushup,
       name: 'Push-ups',
-      subtitle: 'Track elbow depth and lockout',
+      subtitle: 'Depth and a straight body line',
       emoji: '💪',
       setupTip:
-          'Put the phone on the floor side-on, about 2 m away, with shoulder, elbow and wrist in view.',
+          'Put the phone on the floor side-on, about 2 m away, with your whole body from shoulders to feet in view.',
       downAngle: 90,
       upAngle: 155,
     ),
     Exercise(
       type: ExerciseType.curl,
       name: 'Bicep curls',
-      subtitle: 'Track contraction and extension',
+      subtitle: 'Full range, tucked elbow, no swinging',
       emoji: '🔥',
       setupTip:
-          'Stand side-on, about 2 m away, with your working arm nearest the camera.',
+          'Stand side-on, about 2 m away, with your working arm nearest the camera and your hips in view.',
       downAngle: 55,
       upAngle: 150,
     ),
@@ -61,6 +61,8 @@ class WorkoutRecord {
     required this.reps,
     required this.seconds,
     required this.completedAt,
+    this.goodReps,
+    this.attempts,
   });
 
   final String exercise;
@@ -68,21 +70,51 @@ class WorkoutRecord {
   final int seconds;
   final DateTime completedAt;
 
-  String encode() =>
-      '$exercise|$reps|$seconds|${completedAt.toIso8601String()}';
+  /// Reps with clean form. Null for workouts saved before form scoring.
+  final int? goodReps;
 
+  /// Counted reps plus rejected partial attempts. Null before form scoring.
+  final int? attempts;
+
+  /// Percentage of attempts that were clean reps, when known.
+  int? get formScore {
+    final good = goodReps;
+    final total = attempts;
+    if (good == null || total == null || total == 0) return null;
+    return (good * 100 / total).round();
+  }
+
+  String encode() => [
+    exercise,
+    reps,
+    seconds,
+    completedAt.toIso8601String(),
+    if (goodReps != null && attempts != null) ...[goodReps, attempts],
+  ].join('|');
+
+  /// Reads both the original 4-field format and the 6-field format with
+  /// form data.
   static WorkoutRecord? decode(String value) {
     final parts = value.split('|');
-    if (parts.length != 4) return null;
+    if (parts.length != 4 && parts.length != 6) return null;
     final reps = int.tryParse(parts[1]);
     final seconds = int.tryParse(parts[2]);
     final date = DateTime.tryParse(parts[3]);
     if (reps == null || seconds == null || date == null) return null;
+    int? goodReps;
+    int? attempts;
+    if (parts.length == 6) {
+      goodReps = int.tryParse(parts[4]);
+      attempts = int.tryParse(parts[5]);
+      if (goodReps == null || attempts == null) return null;
+    }
     return WorkoutRecord(
       exercise: parts[0],
       reps: reps,
       seconds: seconds,
       completedAt: date,
+      goodReps: goodReps,
+      attempts: attempts,
     );
   }
 }

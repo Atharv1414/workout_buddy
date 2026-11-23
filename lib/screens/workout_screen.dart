@@ -10,9 +10,11 @@ import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import '../models/exercise.dart';
 import '../services/history_repository.dart';
 import '../services/app_preferences.dart';
+import '../services/form_coach.dart';
 import '../services/frame_rotation.dart';
 import '../services/integrations.dart';
 import '../services/rep_counter.dart';
+import '../widgets/score_color.dart';
 
 const _deviceRotation = <DeviceOrientation, int>{
   DeviceOrientation.portraitUp: 0,
@@ -48,7 +50,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     with WidgetsBindingObserver {
   CameraController? _camera;
   late final PoseDetector _detector;
-  late RepCounter _counter;
+  late FormCoach _coach;
   final _history = HistoryRepository();
   final _preferences = AppPreferences();
   final _health = DeviceHealthIntegration();
@@ -61,6 +63,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   bool _finished = false;
   bool _leftSide = true;
   String _feedback = 'Step back until your full body is visible';
+  CueTone _tone = CueTone.neutral;
   double? _angle;
   int _seconds = 0;
   Object? _error;
@@ -69,7 +72,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _counter = RepCounter(widget.exercise);
+    _coach = FormCoach(widget.exercise);
     _detector = PoseDetector(
       options: PoseDetectorOptions(mode: PoseDetectionMode.stream),
     );
@@ -167,7 +170,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
 
   void _reset() {
     setState(() {
-      _counter = RepCounter(widget.exercise);
+      _coach = FormCoach(widget.exercise);
       _watch.reset();
       _seconds = 0;
     });
@@ -206,54 +209,57 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         _setReading(null, 'Step back until your full body is visible');
         return;
       }
-      final points = _pointsFor(poses.first);
-      if (points == null) {
+      final update = _coach.update(_sampleFor(poses.first));
+      if (update == null) {
         _setReading(
           null,
           'Keep your ${_leftSide ? 'left' : 'right'} side visible',
         );
         return;
       }
-      final angle = jointAngle(points.$1, points.$2, points.$3);
-      final update = _counter.update(angle);
-      _setReading(angle, update.feedback);
+      _setReading(update.angle, update.cue, update.tone);
     } finally {
       _processing = false;
     }
   }
 
-  (JointPoint, JointPoint, JointPoint)? _pointsFor(Pose pose) {
+  /// The tracked side's joints that ML Kit is reasonably sure about.
+  PoseSample _sampleFor(Pose pose) {
     final left = _leftSide;
-    final types = widget.exercise.type == ExerciseType.squat
-        ? (
-            left ? PoseLandmarkType.leftHip : PoseLandmarkType.rightHip,
-            left ? PoseLandmarkType.leftKnee : PoseLandmarkType.rightKnee,
-            left ? PoseLandmarkType.leftAnkle : PoseLandmarkType.rightAnkle,
-          )
-        : (
-            left
-                ? PoseLandmarkType.leftShoulder
-                : PoseLandmarkType.rightShoulder,
-            left ? PoseLandmarkType.leftElbow : PoseLandmarkType.rightElbow,
-            left ? PoseLandmarkType.leftWrist : PoseLandmarkType.rightWrist,
-          );
-    final a = pose.landmarks[types.$1];
-    final b = pose.landmarks[types.$2];
-    final c = pose.landmarks[types.$3];
-    if (a == null ||
-        b == null ||
-        c == null ||
-        [a, b, c].any((item) => item.likelihood < .55)) {
-      return null;
-    }
-    return (JointPoint(a.x, a.y), JointPoint(b.x, b.y), JointPoint(c.x, c.y));
+    final types = {
+      Joint.shoulder: left
+          ? PoseLandmarkType.leftShoulder
+          : PoseLandmarkType.rightShoulder,
+      Joint.elbow: left
+          ? PoseLandmarkType.leftElbow
+          : PoseLandmarkType.rightElbow,
+      Joint.wrist: left
+          ? PoseLandmarkType.leftWrist
+          : PoseLandmarkType.rightWrist,
+      Joint.hip: left ? PoseLandmarkType.leftHip : PoseLandmarkType.rightHip,
+      Joint.knee: left ? PoseLandmarkType.leftKnee : PoseLandmarkType.rightKnee,
+      Joint.ankle: left
+          ? PoseLandmarkType.leftAnkle
+          : PoseLandmarkType.rightAnkle,
+    };
+    return {
+      for (final entry in types.entries)
+        if (pose.landmarks[entry.value] case final landmark?
+            when landmark.likelihood >= .55)
+          entry.key: JointPoint(landmark.x, landmark.y),
+    };
   }
 
-  void _setReading(double? angle, String feedback) {
+  void _setReading(
+    double? angle,
+    String feedback, [
+    CueTone tone = CueTone.neutral,
+  ]) {
     if (!mounted) return;
     setState(() {
       _angle = angle;
       _feedback = feedback;
+      _tone = tone;
     });
   }
 
@@ -263,20 +269,22 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     _watch.stop();
     await _stopStream();
     bool? healthSynced;
-    if (_counter.reps > 0) {
+    if (_coach.reps > 0) {
       await _history.save(
         WorkoutRecord(
           exercise: widget.exercise.name,
-          reps: _counter.reps,
+          reps: _coach.reps,
           seconds: _watch.elapsed.inSeconds,
           completedAt: DateTime.now(),
+          goodReps: _coach.goodReps,
+          attempts: _coach.attempts,
         ),
       );
       if (await _preferences.healthSyncEnabled()) {
         try {
           healthSynced = await _health.exportWorkout(
             exercise: widget.exercise.name,
-            reps: _counter.reps,
+            reps: _coach.reps,
             duration: _watch.elapsed,
           );
         } catch (_) {
@@ -301,10 +309,56 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                 context,
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Text(
-              '${_counter.reps} reps in ${_watch.elapsed.inSeconds} seconds',
+              '${widget.exercise.name} • ${_formatDuration(_watch.elapsed)}',
+              style: const TextStyle(color: Colors.white60),
             ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                _SummaryStat(label: 'Reps', value: '${_coach.reps}'),
+                _SummaryStat(label: 'Good form', value: '${_coach.goodReps}'),
+                _SummaryStat(
+                  label: 'Form score',
+                  value: _coach.formScore == null
+                      ? '--'
+                      : '${_coach.formScore}%',
+                  color: _scoreColor(_coach.formScore),
+                ),
+              ],
+            ),
+            if (_coach.topIssue case final issue?) ...[
+              const SizedBox(height: 18),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Focus next time: ${issue.label}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Colors.amber,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(issue.tip, style: const TextStyle(height: 1.4)),
+                  ],
+                ),
+              ),
+            ] else if (_coach.reps > 0) ...[
+              const SizedBox(height: 18),
+              const Text(
+                'Every rep had clean form. Great set!',
+                style: TextStyle(color: Color(0xFF71E6A5)),
+              ),
+            ],
             if (healthSynced != null) ...[
               const SizedBox(height: 8),
               Text(
@@ -334,7 +388,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   }
 
   Future<void> _tryClose() async {
-    if (_counter.reps == 0 || _finished) {
+    if (_coach.reps == 0 || _finished) {
       if (mounted) Navigator.pop(context);
       return;
     }
@@ -342,7 +396,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Discard workout?'),
-        content: Text('Your ${_counter.reps} reps have not been saved.'),
+        content: Text('Your ${_coach.reps} reps have not been saved.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -385,7 +439,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   Widget build(BuildContext context) {
     final camera = _camera;
     return PopScope(
-      canPop: _counter.reps == 0 || _finished,
+      canPop: _coach.reps == 0 || _finished,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _tryClose();
       },
@@ -452,86 +506,126 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                             _leftSide = value.first;
                             // The other side's joints are elsewhere; don't
                             // let the switch complete half a rep.
-                            _counter.restartCycle();
+                            _coach.restartCycle();
                           }),
                         ),
                       ],
                     ),
-                    if (_counter.reps == 0) ...[
-                      const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.phone_android, size: 20),
-                            const SizedBox(width: 10),
-                            Expanded(child: Text(widget.exercise.setupTip)),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const Spacer(),
-                    Text(
-                      '${_counter.reps}',
-                      style: const TextStyle(
-                        fontSize: 86,
-                        fontWeight: FontWeight.w900,
-                        height: .9,
-                      ),
-                    ),
-                    const Text(
-                      'REPS',
-                      style: TextStyle(
-                        letterSpacing: 3,
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: Text(
-                        _feedback,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${_angle?.toStringAsFixed(0) ?? '--'}°  •  ${_seconds}s',
-                      style: const TextStyle(color: Colors.white70),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _reset,
-                            child: const Text('Reset'),
+                    // With no camera there is nothing to count; show only the
+                    // error, plus a way to keep reps done before it failed.
+                    if (_error == null) ...[
+                      if (_coach.reps == 0) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: _finish,
-                            child: const Text('Finish workout'),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.phone_android, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(child: Text(widget.exercise.setupTip)),
+                            ],
                           ),
                         ),
                       ],
-                    ),
+                      const Spacer(),
+                      Text(
+                        '${_coach.reps}',
+                        style: const TextStyle(
+                          fontSize: 86,
+                          fontWeight: FontWeight.w900,
+                          height: .9,
+                        ),
+                      ),
+                      const Text(
+                        'REPS',
+                        style: TextStyle(
+                          letterSpacing: 3,
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (_coach.attempts > 0) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          '${_coach.goodReps} good  •  form ${_coach.formScore}%',
+                          style: TextStyle(
+                            color: _scoreColor(_coach.formScore),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: switch (_tone) {
+                            CueTone.good => const Color(
+                              0xFF71E6A5,
+                            ).withValues(alpha: .28),
+                            CueTone.warning => Colors.amber.withValues(
+                              alpha: .28,
+                            ),
+                            CueTone.neutral => Colors.black54,
+                          },
+                          border: Border.all(
+                            color: switch (_tone) {
+                              CueTone.good => const Color(0xFF71E6A5),
+                              CueTone.warning => Colors.amber,
+                              CueTone.neutral => Colors.transparent,
+                            },
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Text(
+                          _feedback,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${_angle?.toStringAsFixed(0) ?? '--'}°  •  ${_seconds}s',
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _reset,
+                              child: const Text('Reset'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: _finish,
+                              child: const Text('Finish workout'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else if (_coach.reps > 0) ...[
+                      const Spacer(),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: _finish,
+                          child: Text('Finish and save ${_coach.reps} reps'),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -541,6 +635,39 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       ),
     );
   }
+}
+
+String _formatDuration(Duration value) {
+  final minutes = value.inMinutes;
+  final seconds = value.inSeconds % 60;
+  return minutes == 0 ? '${seconds}s' : '${minutes}m ${seconds}s';
+}
+
+Color _scoreColor(int? score) =>
+    score == null ? Colors.white70 : scoreColor(score);
+
+class _SummaryStat extends StatelessWidget {
+  const _SummaryStat({required this.label, required this.value, this.color});
+  final String label;
+  final String value;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+            color: color ?? Colors.white,
+          ),
+        ),
+        Text(label, style: const TextStyle(color: Colors.white60)),
+      ],
+    ),
+  );
 }
 
 extension _FirstOrNull<T> on Iterable<T> {

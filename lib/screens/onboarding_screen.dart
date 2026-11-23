@@ -19,7 +19,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     (
       Icons.motion_photos_on_outlined,
       'Your form coach',
-      'Workout Buddy counts reps and gives simple movement cues while you train.',
+      'Workout Buddy counts reps, checks your form on every rep and tells you what to fix.',
     ),
     (
       Icons.lock_outline,

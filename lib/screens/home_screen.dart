@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/exercise.dart';
+import '../widgets/score_color.dart';
 import '../services/history_repository.dart';
 import 'settings_screen.dart';
 import 'workout_screen.dart';
@@ -140,6 +141,10 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, snapshot) {
         final records = snapshot.data ?? const <WorkoutRecord>[];
         final total = records.fold<int>(0, (sum, item) => sum + item.reps);
+        final scored = [for (final record in records) ?record.formScore];
+        final averageForm = scored.isEmpty
+            ? null
+            : (scored.reduce((a, b) => a + b) / scored.length).round();
         return ListView(
           padding: const EdgeInsets.all(20),
           children: [
@@ -158,6 +163,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _Stat(label: 'Total reps', value: '$total'),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _Stat(
+                    label: 'Avg form',
+                    value: averageForm == null ? '--' : '$averageForm%',
+                    color: averageForm == null ? null : scoreColor(averageForm),
+                  ),
                 ),
               ],
             ),
@@ -184,9 +197,30 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Color(0xFF71E6A5),
                   ),
                   title: Text(record.exercise),
-                  subtitle: Text('${record.reps} reps • ${record.seconds}s'),
-                  trailing: Text(
-                    '${record.completedAt.day}/${record.completedAt.month}',
+                  subtitle: Text(
+                    [
+                      '${record.reps} reps',
+                      if (record.goodReps case final good?) '$good good',
+                      '${record.seconds}s',
+                    ].join(' • '),
+                  ),
+                  trailing: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (record.formScore case final score?)
+                        Text(
+                          '$score%',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: scoreColor(score),
+                          ),
+                        ),
+                      Text(
+                        '${record.completedAt.day}/${record.completedAt.month}',
+                        style: const TextStyle(color: Colors.white60),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -199,22 +233,23 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat({required this.label, required this.value});
+  const _Stat({required this.label, required this.value, this.color});
   final String label;
   final String value;
+  final Color? color;
   @override
   Widget build(BuildContext context) => Card(
     child: Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             value,
-            style: const TextStyle(
-              fontSize: 30,
+            style: TextStyle(
+              fontSize: 26,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF71E6A5),
+              color: color ?? const Color(0xFF71E6A5),
             ),
           ),
           Text(label, style: const TextStyle(color: Colors.white60)),

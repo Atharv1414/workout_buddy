@@ -145,9 +145,37 @@ void main() {
       expect(decoded.completedAt, record.completedAt);
     });
 
+    test('round-trips form data', () {
+      final record = WorkoutRecord(
+        exercise: 'Push-ups',
+        reps: 10,
+        seconds: 60,
+        completedAt: DateTime.utc(2026, 11, 20),
+        goodReps: 7,
+        attempts: 11,
+      );
+      final decoded = WorkoutRecord.decode(record.encode())!;
+      expect(decoded.goodReps, 7);
+      expect(decoded.attempts, 11);
+      expect(decoded.formScore, 64);
+    });
+
+    test('reads workouts saved before form scoring', () {
+      final decoded = WorkoutRecord.decode(
+        'Squats|12|95|2026-08-13T17:00:00.000',
+      )!;
+      expect(decoded.reps, 12);
+      expect(decoded.goodReps, isNull);
+      expect(decoded.formScore, isNull);
+    });
+
     test('ignores corrupt entries', () {
       expect(WorkoutRecord.decode('Squats|x|95|2026-11-20'), isNull);
       expect(WorkoutRecord.decode('garbage'), isNull);
+      expect(
+        WorkoutRecord.decode('Squats|12|95|2026-08-13T17:00:00.000|x|11'),
+        isNull,
+      );
     });
   });
 }

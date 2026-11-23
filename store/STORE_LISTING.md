@@ -10,18 +10,20 @@ Private, real-time exercise form coach
 
 ## Promotional text
 
-Count reps, improve consistency, and keep workout summaries in one simple, privacy-first app.
+Count reps, score your form on every rep, and see exactly what to fix, all in one privacy-first app.
 
 ## Full description
 
-Workout Buddy turns your phone into a private exercise companion. Choose squats, push-ups, or bicep curls, place your phone where your body is visible, and receive live repetition counts and simple movement cues.
+Workout Buddy turns your phone into a private exercise companion. Choose squats, push-ups, or bicep curls, place your phone where your body is visible, and get live rep counts and a form check on every rep: squat depth and chest position, a straight push-up body line, and strict curls without elbow drift or swinging. Partial reps don't count, and each set ends with a form score and the one thing to fix next time.
 
 Camera analysis happens on your device. Workout Buddy does not upload or save your video. Completed sessions are stored locally, giving you an easy view of recent workouts and total repetitions.
 
 Features:
 
 - Live repetition counting
-- Simple form and visibility cues
+- Form check on every rep, with live coaching cues
+- Form score per set and the top fault to fix
+- Partial reps detected and not counted
 - Left- or right-side tracking
 - Squats, push-ups, and bicep curls
 - Local workout history and progress totals

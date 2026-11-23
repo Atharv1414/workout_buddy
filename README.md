@@ -8,6 +8,8 @@ Workout Buddy is a privacy-first mobile exercise coach for iPhone and Android. I
 - First-run privacy and safety onboarding
 - Live front-camera preview and on-device pose estimation
 - Stable, full-cycle repetition counting
+- Per-rep form scoring: squat depth and torso lean, push-up hip sag/pike, curl elbow drift and body swing
+- Partial reps detected and rejected; set form score and top fault in the summary
 - Left- and right-side tracking
 - Squat, push-up, and bicep-curl coaching
 - Workout timer, summary, and locally stored history
@@ -49,6 +51,7 @@ partner-access steps that require the app-owner accounts.
 
 - `lib/screens` contains the training, camera, and progress experiences.
 - `lib/services/rep_counter.dart` contains testable angle and rep-counting logic.
+- `lib/services/form_coach.dart` scores each rep's form from side-view pose samples. Its thresholds are starting points to calibrate on real devices.
 - `lib/services/history_repository.dart` stores the latest 100 summaries locally.
 - `lib/services/integrations.dart` provides Apple Health and Health Connect export and the safe Technogym boundary.
 - `android` and `ios` contain their standard platform runners and camera permissions.
