@@ -19,6 +19,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _preferences = AppPreferences();
   final _health = DeviceHealthIntegration();
   bool _leftSide = true;
+  bool _voice = true;
   bool _healthSync = false;
   bool _requestingHealth = false;
 
@@ -27,6 +28,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _preferences.preferredLeftSide().then((value) {
       if (mounted) setState(() => _leftSide = value);
+    });
+    _preferences.voiceCuesEnabled().then((value) {
+      if (mounted) setState(() => _voice = value);
     });
     _preferences.healthSyncEnabled().then((value) {
       if (mounted) setState(() => _healthSync = value);
@@ -87,6 +91,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: const Text('Track left side by default'),
           subtitle: const Text('You can change sides during any workout.'),
           secondary: const Icon(Icons.accessibility_new),
+        ),
+      ),
+      Card(
+        child: SwitchListTile(
+          value: _voice,
+          onChanged: (value) async {
+            setState(() => _voice = value);
+            await _preferences.setVoiceCuesEnabled(value);
+          },
+          title: const Text('Spoken cues'),
+          subtitle: const Text('Hear your rep count and form tips.'),
+          secondary: const Icon(Icons.volume_up_outlined),
         ),
       ),
       const SizedBox(height: 18),

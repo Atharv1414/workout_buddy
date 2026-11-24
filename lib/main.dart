@@ -41,10 +41,13 @@ class _WorkoutBuddyAppState extends State<WorkoutBuddyApp> {
   final _messenger = GlobalKey<ScaffoldMessengerState>();
   late bool _onboarded = widget.onboardingComplete;
   StreamSubscription<Uri>? _links;
+  late final AppLifecycleListener _lifecycle;
 
   @override
   void initState() {
     super.initState();
+    // The paid period may have ended while the app sat in the background.
+    _lifecycle = AppLifecycleListener(onResume: () => setState(() {}));
     // Gyms open workoutbuddy://activate?code=… from their own app or site.
     // The stream also delivers the link that launched the app.
     _links = AppLinks().uriLinkStream.listen(_onLink, onError: (_) {});
@@ -53,6 +56,7 @@ class _WorkoutBuddyAppState extends State<WorkoutBuddyApp> {
   @override
   void dispose() {
     _links?.cancel();
+    _lifecycle.dispose();
     super.dispose();
   }
 

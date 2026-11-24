@@ -25,6 +25,7 @@ Features:
 - Live repetition counting
 - Form check on every rep, with live coaching cues
 - Form score per set and the top fault to fix
+- Spoken rep counts and form cues
 - Partial reps detected and not counted
 - Left- or right-side tracking
 - Squats, push-ups, and bicep curls

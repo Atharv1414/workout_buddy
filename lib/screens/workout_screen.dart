@@ -10,10 +10,12 @@ import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import '../models/exercise.dart';
 import '../services/history_repository.dart';
 import '../services/app_preferences.dart';
+import '../services/cue_policy.dart';
 import '../services/form_coach.dart';
 import '../services/frame_rotation.dart';
 import '../services/integrations.dart';
 import '../services/rep_counter.dart';
+import '../services/voice_coach.dart';
 import '../widgets/score_color.dart';
 
 const _deviceRotation = <DeviceOrientation, int>{
@@ -54,6 +56,10 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   final _history = HistoryRepository();
   final _preferences = AppPreferences();
   final _health = DeviceHealthIntegration();
+  final _voice = VoiceCoach();
+  // Runs for the whole screen, unlike _watch, which pauses and resets.
+  final _cueClock = Stopwatch()..start();
+  CuePolicy _cues = CuePolicy();
   final _watch = Stopwatch();
   Timer? _ticker;
   bool _processing = false;
@@ -81,6 +87,8 @@ class _WorkoutScreenState extends State<WorkoutScreen>
 
   Future<void> _start() async {
     _leftSide = await _preferences.preferredLeftSide();
+    _voice.enabled = await _preferences.voiceCuesEnabled();
+    if (!mounted) return;
     await _startSession();
   }
 
@@ -169,8 +177,10 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   }
 
   void _reset() {
+    unawaited(_voice.stop());
     setState(() {
       _coach = FormCoach(widget.exercise);
+      _cues = CuePolicy();
       _watch.reset();
       _seconds = 0;
     });
@@ -205,19 +215,19 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         ),
       );
       final poses = await _detector.processImage(input);
+      // The workout may have ended while this frame was being analysed.
+      if (!mounted || _finished || _inBackground) return;
       if (poses.isEmpty) {
-        _setReading(null, 'Step back until your full body is visible');
+        _setLost('Step back until your full body is visible');
         return;
       }
       final update = _coach.update(_sampleFor(poses.first));
       if (update == null) {
-        _setReading(
-          null,
-          'Keep your ${_leftSide ? 'left' : 'right'} side visible',
-        );
+        _setLost('Keep your ${_leftSide ? 'left' : 'right'} side visible');
         return;
       }
       _setReading(update.angle, update.cue, update.tone);
+      _voice.say(_cues.onUpdate(update, _coach, _cueClock.elapsed));
     } finally {
       _processing = false;
     }
@@ -250,6 +260,17 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     };
   }
 
+  void _setLost(String message) {
+    _setReading(null, message);
+    _voice.say(_cues.onLost(message, _cueClock.elapsed));
+  }
+
+  void _toggleVoice() {
+    setState(() => _voice.enabled = !_voice.enabled);
+    if (!_voice.enabled) unawaited(_voice.stop());
+    unawaited(_preferences.setVoiceCuesEnabled(_voice.enabled));
+  }
+
   void _setReading(
     double? angle,
     String feedback, [
@@ -266,6 +287,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   Future<void> _finish() async {
     if (_finished) return;
     _finished = true;
+    unawaited(_voice.stop());
     _watch.stop();
     await _stopStream();
     bool? healthSynced;
@@ -418,6 +440,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         state == AppLifecycleState.paused) {
       _inBackground = true;
       _watch.stop();
+      unawaited(_voice.stop());
       await _closeCamera();
     } else if (state == AppLifecycleState.resumed) {
       _inBackground = false;
@@ -432,6 +455,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     _watch.stop();
     _camera?.dispose();
     _detector.close();
+    unawaited(_voice.dispose());
     super.dispose();
   }
 
@@ -494,6 +518,15 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                         IconButton.filledTonal(
                           onPressed: _tryClose,
                           icon: const Icon(Icons.close),
+                        ),
+                        IconButton.filledTonal(
+                          onPressed: _toggleVoice,
+                          tooltip: _voice.enabled
+                              ? 'Mute spoken cues'
+                              : 'Turn on spoken cues',
+                          icon: Icon(
+                            _voice.enabled ? Icons.volume_up : Icons.volume_off,
+                          ),
                         ),
                         const Spacer(),
                         SegmentedButton<bool>(

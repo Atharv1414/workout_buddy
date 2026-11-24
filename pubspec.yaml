@@ -15,6 +15,7 @@ dependencies:
   health: ^13.3.1
   app_links: ^6.4.1
   cryptography: ^2.9.0
+  flutter_tts: ^4.2.5
 
 dev_dependencies:
   flutter_test:

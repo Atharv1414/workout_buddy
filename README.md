@@ -11,6 +11,7 @@ Workout Buddy is a privacy-first mobile exercise coach for iPhone and Android. I
 - Stable, full-cycle repetition counting
 - Per-rep form scoring: squat depth and torso lean, push-up hip sag/pike, curl elbow drift and body swing
 - Partial reps detected and rejected; set form score and top fault in the summary
+- Spoken rep counts and form cues, with a mute button
 - Left- and right-side tracking
 - Squat, push-up, and bicep-curl coaching
 - Workout timer, summary, and locally stored history
