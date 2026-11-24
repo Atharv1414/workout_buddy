@@ -16,9 +16,11 @@ accounts, or Technogym approval.
 - [x] Static analysis and automated Dart/Python tests passing.
 - [x] Android release App Bundle build verified locally. It intentionally remains unsigned until the private upload key is supplied.
 - [x] iOS CocoaPods dependencies installed and the Xcode project/workspace validated.
+- [x] Gym subscription codes, activation links, gym branding and renewal grace ([`docs/GYM_SUBSCRIPTIONS.md`](docs/GYM_SUBSCRIPTIONS.md)).
 
 ## Private signing setup
 
+- [ ] Back up `~/.workout_buddy/signing_key.json` (gym-code signing key) somewhere safe. It must never be committed.
 - [ ] Create or locate the Google Play upload keystore. Copy `android/key.properties.example` to `android/key.properties`, use absolute or app-relative keystore paths, and fill in the four private values. Both files are ignored by Git.
 - [ ] Run `flutter build appbundle --release`, verify that the resulting AAB is signed, and upload it to a Play internal-testing track.
 - [ ] Open `ios/Runner.xcworkspace` in Xcode, select the app owner's Apple Developer Team, enable automatic signing or choose the intended profiles, and confirm the HealthKit capability.
@@ -39,7 +41,7 @@ Follow [`docs/DEVICE_TESTING.md`](docs/DEVICE_TESTING.md) for the step-by-step p
 - [ ] Push `PRIVACY_POLICY.md` to the public `main` branch so the listing URL resolves before review.
 - [ ] Create App Store Connect and Google Play Console records for the final identifiers.
 - [ ] Add screenshots for required phone sizes, support contact details, category, age rating, and the copy in `store/STORE_LISTING.md`.
-- [ ] Paste `store/REVIEW_NOTES.md` into the reviewer notes and provide any requested demo access.
+- [ ] Paste `store/REVIEW_NOTES.md` into the reviewer notes, with the demo gym code from `~/.workout_buddy/demo_code.txt` (the app is locked without a code).
 - [ ] Complete Apple privacy labels and Google Play Data Safety / Health Apps declarations from the behavior documented in `PRIVACY_POLICY.md`.
 - [ ] Complete TestFlight and Play closed testing, fix blocking feedback, then use a staged production rollout.
 

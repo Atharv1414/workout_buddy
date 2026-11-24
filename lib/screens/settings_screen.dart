@@ -3,7 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../services/app_preferences.dart';
+import '../services/gym_license.dart';
 import '../services/integrations.dart';
+import '../services/license_controller.dart';
+import 'activation_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -70,6 +73,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
       ),
       const SizedBox(height: 22),
+      const _GymSection(),
+      const SizedBox(height: 18),
       Text('Training', style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 8),
       Card(
@@ -193,4 +198,89 @@ class _ConnectionTile extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _GymSection extends StatelessWidget {
+  const _GymSection();
+
+  Future<void> _remove(BuildContext context, LicenseController licenses) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove gym code?'),
+        content: const Text(
+          'Workouts will be locked until you enter a gym code again. '
+          'Your workout history stays on this phone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await licenses.remove();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final licenses = LicenseScope.of(context);
+    final gym = licenses.license;
+    if (gym == null) return const SizedBox.shrink();
+    final lastDay = gym.graceEnds.subtract(const Duration(days: 1));
+    final grace = licenses.status == LicenseStatus.grace;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Gym', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: Icon(
+                  Icons.store_mall_directory_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                title: Text(gym.gymName),
+                subtitle: Text(
+                  grace
+                      ? 'Renewal needed: available until ${formatDay(lastDay)}'
+                      : '${gym.plan.label} plan, active until '
+                            '${formatDay(gym.paidThrough)}',
+                  style: grace ? const TextStyle(color: Colors.amber) : null,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+                child: Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              const ActivationScreen(standalone: true),
+                        ),
+                      ),
+                      child: const Text('Enter a new code'),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => _remove(context, licenses),
+                      child: const Text('Remove'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }

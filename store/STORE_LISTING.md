@@ -14,6 +14,8 @@ Count reps, score your form on every rep, and see exactly what to fix, all in on
 
 ## Full description
 
+Workout Buddy is offered by gyms to their members: activate it from your gym's app or with the code your gym gives you.
+
 Workout Buddy turns your phone into a private exercise companion. Choose squats, push-ups, or bicep curls, place your phone where your body is visible, and get live rep counts and a form check on every rep: squat depth and chest position, a straight push-up body line, and strict curls without elbow drift or swinging. Partial reps don't count, and each set ends with a form score and the one thing to fix next time.
 
 Camera analysis happens on your device. Workout Buddy does not upload or save your video. Completed sessions are stored locally, giving you an easy view of recent workouts and total repetitions.

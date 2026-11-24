@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../services/app_preferences.dart';
-import 'home_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  const OnboardingScreen({super.key, required this.onDone});
+
+  /// Called once the last page is confirmed; the app then shows gym
+  /// activation or the home screen.
+  final VoidCallback onDone;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -42,10 +45,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       return;
     }
     await _preferences.completeOnboarding();
-    if (!mounted) return;
-    await Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+    if (mounted) widget.onDone();
   }
 
   @override

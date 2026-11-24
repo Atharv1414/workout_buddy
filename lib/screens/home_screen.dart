@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../models/exercise.dart';
-import '../widgets/score_color.dart';
+import '../services/gym_license.dart';
 import '../services/history_repository.dart';
+import '../services/license_controller.dart';
+import '../widgets/score_color.dart';
 import 'settings_screen.dart';
 import 'workout_screen.dart';
 
@@ -42,46 +44,63 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _trainPage() {
+    final licenses = LicenseScope.of(context);
+    final gym = licenses.license;
+    final scheme = Theme.of(context).colorScheme;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
       children: [
         Text(
-          'Workout Buddy',
+          gym?.gymName ?? 'Workout Buddy',
           style: Theme.of(
             context,
           ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 6),
         Text(
-          'Your private, real-time form coach',
+          gym == null
+              ? 'Your private, real-time form coach'
+              : 'Form coaching by Workout Buddy',
           style: Theme.of(
             context,
           ).textTheme.bodyLarge?.copyWith(color: Colors.white60),
         ),
+        if (gym != null && licenses.status == LicenseStatus.grace) ...[
+          const SizedBox(height: 18),
+          Card(
+            color: const Color(0xFF3A2E14),
+            child: ListTile(
+              leading: const Icon(Icons.schedule, color: Colors.amber),
+              title: const Text('Your gym needs to renew'),
+              subtitle: Text(
+                '${gym.gymName}\'s access ended on '
+                '${formatDay(gym.paidThrough)}. Workouts stay available until '
+                '${formatDay(gym.graceEnds.subtract(const Duration(days: 1)))} '
+                'while they renew.',
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 28),
         Container(
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF1D5139), Color(0xFF1A2822)],
+            gradient: LinearGradient(
+              colors: [scheme.primaryContainer, const Color(0xFF1A2822)],
             ),
             borderRadius: BorderRadius.circular(24),
           ),
-          child: const Column(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.visibility_outlined,
-                size: 32,
-                color: Color(0xFF71E6A5),
-              ),
-              SizedBox(height: 18),
-              Text(
+              Icon(Icons.visibility_outlined, size: 32, color: scheme.primary),
+              const SizedBox(height: 18),
+              const Text(
                 'Move with confidence',
                 style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
               ),
-              SizedBox(height: 8),
-              Text(
+              const SizedBox(height: 8),
+              const Text(
                 'Pose analysis happens on your phone. Video is never uploaded.',
                 style: TextStyle(color: Colors.white70, height: 1.4),
               ),
@@ -192,9 +211,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ...records.map(
               (record) => Card(
                 child: ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.check_circle,
-                    color: Color(0xFF71E6A5),
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                   title: Text(record.exercise),
                   subtitle: Text(
@@ -249,7 +268,7 @@ class _Stat extends StatelessWidget {
             style: TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w800,
-              color: color ?? const Color(0xFF71E6A5),
+              color: color ?? Theme.of(context).colorScheme.primary,
             ),
           ),
           Text(label, style: const TextStyle(color: Colors.white60)),
@@ -268,11 +287,11 @@ class _IntegrationCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.sync, color: Color(0xFF71E6A5)),
-              SizedBox(width: 10),
-              Text(
+              Icon(Icons.sync, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 10),
+              const Text(
                 'Connected fitness',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
               ),

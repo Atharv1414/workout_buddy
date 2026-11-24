@@ -5,6 +5,7 @@ Workout Buddy is a privacy-first mobile exercise coach for iPhone and Android. I
 ## Mobile app
 
 - Native iOS and Android Flutter projects
+- Gym subscriptions: signed, offline gym access codes, one-tap activation from a gym's own app, gym branding, 7-day renewal grace (see [`docs/GYM_SUBSCRIPTIONS.md`](docs/GYM_SUBSCRIPTIONS.md))
 - First-run privacy and safety onboarding
 - Live front-camera preview and on-device pose estimation
 - Stable, full-cycle repetition counting
@@ -52,6 +53,7 @@ partner-access steps that require the app-owner accounts.
 - `lib/screens` contains the training, camera, and progress experiences.
 - `lib/services/rep_counter.dart` contains testable angle and rep-counting logic.
 - `lib/services/form_coach.dart` scores each rep's form from side-view pose samples. Its thresholds are starting points to calibrate on real devices.
+- `lib/services/gym_license.dart` verifies gym access codes (Ed25519); `tool/gym_code.dart` issues them with a private key kept outside the repo.
 - `lib/services/history_repository.dart` stores the latest 100 summaries locally.
 - `lib/services/integrations.dart` provides Apple Health and Health Connect export and the safe Technogym boundary.
 - `android` and `ios` contain their standard platform runners and camera permissions.
